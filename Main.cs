@@ -18,9 +18,15 @@ namespace BetterAvatarPreview
         public bool Pref_DisableOutlines = false;
         public bool Pref_DebugOutput = false;
 
+        private bool betterAvatarPreviewOn = false;
+        private const string avatarMenuMainModelPath = "UserInterface/MenuContent/Screens/Avatar/AvatarPreviewBase/MainRoot/MainModel";
+        private GameObject avatarMenuMainModel = null;
 
-        // VRCPlayer[Local] ... /AnimationController/HeadAndHandIK/RightEffector/PickupTether(Clone)
-        private GameObject leftHandTether = null;
+        private float PositionOffsetX = 2.0f;
+        private Vector3 resetPosition;
+        private Vector3 resetLocalPosition;
+        private Vector3 resetScale;
+
 
         public override void OnApplicationStart()
         {
@@ -32,6 +38,7 @@ namespace BetterAvatarPreview
 
             var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
             avatarMenu.AddSimpleButton("BetterAvatarPreview", OnPageAvatarOpen);
+
         }
 
         // Skip over initial loading of (buildIndex, sceneName): [(0, "app"), (1, "ui")]
@@ -59,9 +66,52 @@ namespace BetterAvatarPreview
             UpdatePreferences();
         }
 
+        public void ResetBetterAvatarPreview()
+        {
+            MelonLogger.Msg("Resetting avatar preview");
+            if(!betterAvatarPreviewOn)
+            {
+                MelonLogger.Warning("betterAvatarPRevionOn was false! returning...");
+                return;
+            }
+            if(avatarMenuMainModel != null)
+            {
+                MelonLogger.Warning("mainModel not null, reset positions");
+                avatarMenuMainModel.transform.localPosition = resetLocalPosition;
+                avatarMenuMainModel.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
+            }
+            betterAvatarPreviewOn = false;
+        }
+
         public void OnPageAvatarOpen()
         {
-            MelonLogger.Msg("Avatar menu is open!");
+            avatarMenuMainModel = GameObject.Find(avatarMenuMainModelPath);
+            if(avatarMenuMainModel == null)
+            {
+                MelonLogger.Warning("MainModel was not found");
+                return;
+            }
+            MelonLogger.Msg("MainModel found!");
+
+            if(betterAvatarPreviewOn) // reset position and scales
+            {
+                MelonLogger.Msg("Resetting...");
+                ResetBetterAvatarPreview();
+                return;
+            }
+
+            // Store old local position
+            resetLocalPosition = avatarMenuMainModel.transform.localPosition;
+
+            // Scale to 1:1, within reason....
+            var ls = avatarMenuMainModel.transform.lossyScale;
+            Vector3 newLocalScale = new Vector3(1.0f / ls.x,  1.0f / ls.y,  1.0f / ls.z) ;
+            avatarMenuMainModel.transform.localScale = newLocalScale;
+            avatarMenuMainModel.transform.localPosition = resetLocalPosition + new Vector3(PositionOffsetX, 0.0f, 0.0f);
+
+            // Mark dirty
+            betterAvatarPreviewOn = true;
+            MelonLogger.Msg("BetterAvatarPreview on!");
         }
 
         private void UpdatePreferences()
