@@ -5,7 +5,10 @@ using UIExpansionKit.API;
 using Harmony;
 using MelonLoader;
 using UnityEngine;
+using UnityEditor;
 using VRC;
+using VRCSDK2;
+using VRC.SDKInternal;
 
 [assembly:MelonInfo(typeof(BetterAvatarPreview.BetterAvatarPreview), "BetterAvatarPreview", "0.1", "nonce-twice", "https://github.com/nonce-twice/BetterAvatarPreview")]
 [assembly:MelonGame("VRChat", "VRChat")]
@@ -36,6 +39,10 @@ namespace BetterAvatarPreview
         private Quaternion resetLocalRotation;
         private Vector3 resetScale;
 
+        enum AvatarVersion
+        {
+           AV2, AV3, None
+        }
 
         public override void OnApplicationStart()
         {
@@ -50,12 +57,37 @@ namespace BetterAvatarPreview
             customMenu.AddSimpleButton("Do the thing", OnPageAvatarOpen);
             customMenu.AddSimpleButton("Move avatar further", MoveFurther);
             customMenu.AddSimpleButton("Move avatar closer", MoveCloser);
+            customMenu.AddSimpleButton("Toggle Rotation", ToggleAvatarRotation);
             customMenu.AddSimpleButton("Close", CloseMenu);
 
             var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
             avatarMenu.AddSimpleButton("BetterAvatarPreview", OpenMenu);
+            avatarMenu.AddSimpleButton("DebugAvatarInfo", DebugAvatarInfo);
         }
 
+        public void DebugAvatarInfo()
+        {
+            if(avatarMenuMainModel == null)
+            {
+                MelonLogger.Warning("Main Model is null, returning.");
+                return;
+            }
+            AvatarVersion avatarSDKVersion = CheckAvatarSDKVersion();
+
+            bool isSDK3 = (avatarSDKVersion == AvatarVersion.AV3);
+            MelonLogger.Msg("Avatar Version: " + (isSDK3 ? "SDK3" : "SDK2"));
+        }
+
+        public void ToggleAvatarRotation()
+        {
+            var rotator = GetMainModel().GetComponent<UnityStandardAssets.Utility.AutoMoveAndRotate>();
+            if(rotator == null)
+            {
+                MelonLogger.Warning("Could not get AutoMoveAndRotate component, not toggling rotation.");
+                return;
+            }
+            rotator.enabled = !rotator.isActiveAndEnabled;
+        }
         public override void VRChat_OnUiManagerInit()
         {
 //            // Taken directly from Knah's ViewpointTweaker Mod
@@ -150,7 +182,7 @@ namespace BetterAvatarPreview
             {
                 return;
             }
-            avatarMenuMainModel.transform.localPosition += offset;
+            GetMainModel().transform.localPosition += offset;
         }
 
         public void OnPageAvatarOpen()
@@ -203,9 +235,21 @@ namespace BetterAvatarPreview
             Pref_DebugOutput = MelonPreferences.GetEntryValue<bool>(Pref_CategoryName, nameof(Pref_DebugOutput));
         }
 
-        private void CheckIfNewSDK()
+        private AvatarVersion CheckAvatarSDKVersion()
         {
-            GetMainModel();
+            if(avatarMenuMainModel != null)
+            {
+                Component[] sdk2 = avatarMenuMainModel.GetComponentsInChildren<VRCSDK2.VRC_AvatarDescriptor>();
+                if (sdk2.Length > 0) 
+                    return AvatarVersion.AV2;
+
+                // Redundant but implemented for testing
+                Component[] sdk3 = avatarMenuMainModel.GetComponentsInChildren<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
+                if(sdk3.Length > 0)
+                    return AvatarVersion.AV3; 
+                
+            }
+            return AvatarVersion.None;
         }
         private void SetTetherReferences()
         {
