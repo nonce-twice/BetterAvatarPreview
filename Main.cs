@@ -18,6 +18,8 @@ namespace BetterAvatarPreview
         public bool Pref_DisableOutlines = false;
         public bool Pref_DebugOutput = false;
 
+        private ICustomShowableLayoutedMenu customMenu;
+
         private VRCVrCameraSteam ourSteamCamera;
         private Transform ourCameraRig;
         private Transform ourCameraTransform;
@@ -44,24 +46,36 @@ namespace BetterAvatarPreview
             MelonPreferences.CreateCategory(Pref_CategoryName);
             MelonPreferences.CreateEntry(Pref_CategoryName, nameof(Pref_DisableOutlines),   false,  "Blug");
 
-            var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
-            avatarMenu.AddSimpleButton("BetterAvatarPreview", OnPageAvatarOpen);
+            customMenu = UIExpansionKit.API.ExpansionKitApi.CreateCustomFullMenuPopup(LayoutDescription.WideSlimList);
+            customMenu.AddSimpleButton("Do the thing", OnPageAvatarOpen);
+            customMenu.AddSimpleButton("Close", CloseMenu);
 
+            var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
+            avatarMenu.AddSimpleButton("BetterAvatarPreview", OpenMenu);
         }
 
         public override void VRChat_OnUiManagerInit()
         {
-            // Taken directly from Knah's ViewpointTweaker Mod
-            foreach (var vrcTracking in VRCTrackingManager.field_Private_Static_VRCTrackingManager_0.field_Private_List_1_VRCTracking_0)
-            {
-                var trackingSteam = vrcTracking.TryCast<VRCTrackingSteam>();
-                if (trackingSteam == null) continue;
+//            // Taken directly from Knah's ViewpointTweaker Mod
+//            foreach (var vrcTracking in VRCTrackingManager.field_Private_Static_VRCTrackingManager_0.field_Private_List_1_VRCTracking_0)
+//            {
+//                var trackingSteam = vrcTracking.TryCast<VRCTrackingSteam>();
+//                if (trackingSteam == null) continue;
+//
+//                ourSteamCamera = trackingSteam.GetComponentInChildren<VRCVrCameraSteam>();
+//                ourCameraRig = trackingSteam.transform.Find("SteamCamera/[CameraRig]");
+//                ourCameraTransform = trackingSteam.transform.Find("SteamCamera/[CameraRig]/Neck/Camera (head)/Camera (eye)");
+//            }
+//
+        }
 
-                ourSteamCamera = trackingSteam.GetComponentInChildren<VRCVrCameraSteam>();
-                ourCameraRig = trackingSteam.transform.Find("SteamCamera/[CameraRig]");
-                ourCameraTransform = trackingSteam.transform.Find("SteamCamera/[CameraRig]/Neck/Camera (head)/Camera (eye)");
-            }
-
+        public void OpenMenu()
+        {
+            customMenu.Show();
+        }
+        public void CloseMenu()
+        {
+            customMenu.Hide();
         }
 
         // Skip over initial loading of (buildIndex, sceneName): [(0, "app"), (1, "ui")]
@@ -141,6 +155,7 @@ namespace BetterAvatarPreview
             avatarMenuMainModel.transform.localScale = newLocalScale;
             avatarMenuMainModel.transform.rotation = Quaternion.identity;
 
+            // must be multiplied by local scale offset to match floor
             float floorOffset = newLocalScale.y * (avatarMenuMainModel.transform.position.y - playerTransform.position.y); // should be positive 
             avatarMenuMainModel.transform.localPosition = new Vector3(0.0f, -floorOffset , 0.0f);
 
