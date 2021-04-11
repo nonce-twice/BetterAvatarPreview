@@ -18,13 +18,20 @@ namespace BetterAvatarPreview
         public bool Pref_DisableOutlines = false;
         public bool Pref_DebugOutput = false;
 
+        private VRCVrCameraSteam ourSteamCamera;
+        private Transform ourCameraRig;
+        private Transform ourCameraTransform;
+
         private bool betterAvatarPreviewOn = false;
         private const string avatarMenuMainModelPath = "UserInterface/MenuContent/Screens/Avatar/AvatarPreviewBase/MainRoot/MainModel";
+        private Transform userInterfaceTransform = null;
         private GameObject avatarMenuMainModel = null;
 
         private float PositionOffsetX = 2.0f;
+        private float PositionOffsetY = -1.0f;
         private Vector3 resetPosition;
         private Vector3 resetLocalPosition;
+        private Quaternion resetLocalRotation;
         private Vector3 resetScale;
 
 
@@ -33,11 +40,27 @@ namespace BetterAvatarPreview
             Harmony.Patch(AccessTools.Method(typeof(VRC.UI.PageAvatar), "OnEnable"), 
                 postfix: new HarmonyMethod(typeof(BetterAvatarPreview).GetMethod("OnPageAvatarOpen", BindingFlags.Static | BindingFlags.Public)));
 
+
             MelonPreferences.CreateCategory(Pref_CategoryName);
             MelonPreferences.CreateEntry(Pref_CategoryName, nameof(Pref_DisableOutlines),   false,  "Blug");
 
             var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
             avatarMenu.AddSimpleButton("BetterAvatarPreview", OnPageAvatarOpen);
+
+        }
+
+        public override void VRChat_OnUiManagerInit()
+        {
+            // Taken directly from Knah's ViewpointTweaker Mod
+            foreach (var vrcTracking in VRCTrackingManager.field_Private_Static_VRCTrackingManager_0.field_Private_List_1_VRCTracking_0)
+            {
+                var trackingSteam = vrcTracking.TryCast<VRCTrackingSteam>();
+                if (trackingSteam == null) continue;
+
+                ourSteamCamera = trackingSteam.GetComponentInChildren<VRCVrCameraSteam>();
+                ourCameraRig = trackingSteam.transform.Find("SteamCamera/[CameraRig]");
+                ourCameraTransform = trackingSteam.transform.Find("SteamCamera/[CameraRig]/Neck/Camera (head)/Camera (eye)");
+            }
 
         }
 
@@ -78,6 +101,7 @@ namespace BetterAvatarPreview
             {
                 MelonLogger.Warning("mainModel not null, reset positions");
                 avatarMenuMainModel.transform.localPosition = resetLocalPosition;
+                avatarMenuMainModel.transform.localRotation = resetLocalRotation;
                 avatarMenuMainModel.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
             }
             betterAvatarPreviewOn = false;
@@ -85,13 +109,20 @@ namespace BetterAvatarPreview
 
         public void OnPageAvatarOpen()
         {
+            Transform playerTransform = VRCPlayer.field_Internal_Static_VRCPlayer_0.transform;
+            userInterfaceTransform = GameObject.Find("UserInterface").transform;
             avatarMenuMainModel = GameObject.Find(avatarMenuMainModelPath);
+            if(userInterfaceTransform == null)
+            {
+                MelonLogger.Warning("UserInterface traansfrom not found");
+                return;
+            }
             if(avatarMenuMainModel == null)
             {
                 MelonLogger.Warning("MainModel was not found");
                 return;
             }
-            MelonLogger.Msg("MainModel found!");
+            MelonLogger.Msg("MainModel and Transform found!");
 
             if(betterAvatarPreviewOn) // reset position and scales
             {
@@ -102,12 +133,17 @@ namespace BetterAvatarPreview
 
             // Store old local position
             resetLocalPosition = avatarMenuMainModel.transform.localPosition;
+            resetLocalRotation = avatarMenuMainModel.transform.localRotation;
 
-            // Scale to 1:1, within reason....
+            // Scale to 1:1, within reason...
             var ls = avatarMenuMainModel.transform.lossyScale;
-            Vector3 newLocalScale = new Vector3(1.0f / ls.x,  1.0f / ls.y,  1.0f / ls.z) ;
+            Vector3 newLocalScale = new Vector3(1.0f / ls.x,  1.0f / ls.y,  1.0f / ls.z);
             avatarMenuMainModel.transform.localScale = newLocalScale;
-            avatarMenuMainModel.transform.localPosition = resetLocalPosition + new Vector3(PositionOffsetX, 0.0f, 0.0f);
+            avatarMenuMainModel.transform.rotation = Quaternion.identity;
+
+            float floorOffset = newLocalScale.y * (avatarMenuMainModel.transform.position.y - playerTransform.position.y); // should be positive 
+            avatarMenuMainModel.transform.localPosition = new Vector3(0.0f, -floorOffset , 0.0f);
+
 
             // Mark dirty
             betterAvatarPreviewOn = true;
