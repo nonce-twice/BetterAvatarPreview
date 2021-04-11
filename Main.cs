@@ -29,7 +29,7 @@ namespace BetterAvatarPreview
         private Transform userInterfaceTransform = null;
         private GameObject avatarMenuMainModel = null;
 
-        private float PositionOffsetX = 2.0f;
+        private float PositionOffsetX = -1.0f;
         private float PositionOffsetY = -1.0f;
         private Vector3 resetPosition;
         private Vector3 resetLocalPosition;
@@ -48,6 +48,8 @@ namespace BetterAvatarPreview
 
             customMenu = UIExpansionKit.API.ExpansionKitApi.CreateCustomFullMenuPopup(LayoutDescription.WideSlimList);
             customMenu.AddSimpleButton("Do the thing", OnPageAvatarOpen);
+            customMenu.AddSimpleButton("Move avatar further", MoveFurther);
+            customMenu.AddSimpleButton("Move avatar closer", MoveCloser);
             customMenu.AddSimpleButton("Close", CloseMenu);
 
             var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
@@ -76,6 +78,18 @@ namespace BetterAvatarPreview
         public void CloseMenu()
         {
             customMenu.Hide();
+        }
+
+        public void MoveFurther()
+        {
+            if (!betterAvatarPreviewOn) return;
+            MoveModel(new Vector3(-0.25f, 0.0f, 0.0f));
+        }
+
+        public void MoveCloser()
+        {
+            if (!betterAvatarPreviewOn) return;
+            MoveModel(new Vector3(0.25f, 0.0f, 0.0f));
         }
 
         // Skip over initial loading of (buildIndex, sceneName): [(0, "app"), (1, "ui")]
@@ -121,16 +135,28 @@ namespace BetterAvatarPreview
             betterAvatarPreviewOn = false;
         }
 
+        private GameObject GetMainModel()
+        {
+            if(avatarMenuMainModel == null)
+            {
+                MelonLogger.Warning("MainModel was not found");
+                avatarMenuMainModel = GameObject.Find(avatarMenuMainModelPath);
+            }
+            return avatarMenuMainModel;
+        }
+        private void MoveModel(Vector3 offset)
+        {
+            if (avatarMenuMainModel == null)
+            {
+                return;
+            }
+            avatarMenuMainModel.transform.localPosition += offset;
+        }
+
         public void OnPageAvatarOpen()
         {
             Transform playerTransform = VRCPlayer.field_Internal_Static_VRCPlayer_0.transform;
-            userInterfaceTransform = GameObject.Find("UserInterface").transform;
             avatarMenuMainModel = GameObject.Find(avatarMenuMainModelPath);
-            if(userInterfaceTransform == null)
-            {
-                MelonLogger.Warning("UserInterface traansfrom not found");
-                return;
-            }
             if(avatarMenuMainModel == null)
             {
                 MelonLogger.Warning("MainModel was not found");
@@ -159,6 +185,12 @@ namespace BetterAvatarPreview
             float floorOffset = newLocalScale.y * (avatarMenuMainModel.transform.position.y - playerTransform.position.y); // should be positive 
             avatarMenuMainModel.transform.localPosition = new Vector3(0.0f, -floorOffset , 0.0f);
 
+            // Move model a bit further out
+            Vector3 playerRight = playerTransform.right;
+            float xOffset = newLocalScale.x * PositionOffsetX;
+            MoveModel(new Vector3(xOffset, 0.0f, 0.0f));
+
+
 
             // Mark dirty
             betterAvatarPreviewOn = true;
@@ -171,6 +203,10 @@ namespace BetterAvatarPreview
             Pref_DebugOutput = MelonPreferences.GetEntryValue<bool>(Pref_CategoryName, nameof(Pref_DebugOutput));
         }
 
+        private void CheckIfNewSDK()
+        {
+            GetMainModel();
+        }
         private void SetTetherReferences()
         {
 //            try 
