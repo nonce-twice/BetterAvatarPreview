@@ -18,6 +18,11 @@ namespace BetterAvatarPreview
 
     public class BetterAvatarPreview : MelonMod
     {
+
+        // Debug for limiting stuff
+        private static int CURRENT_ITERATIONS = 0;
+        private static int MAX_ITERATIONS = 2;
+
         public const string Pref_CategoryName = "BetterAvatarPreview";
         public bool Pref_DebugOutput = false;
 
@@ -25,6 +30,7 @@ namespace BetterAvatarPreview
         private bool avatarMenuOpen = false;
 
         private ICustomShowableLayoutedMenu customMenu;
+        private string currentAvatarId = "";
 
 
         private VRCVrCameraSteam ourSteamCamera;
@@ -36,7 +42,7 @@ namespace BetterAvatarPreview
         private Transform userInterfaceTransform = null;
         private GameObject avatarMenuMainModel = null;
 
-        private AvatarPreview CurrentAvatarPreview;
+        private AvatarPreview CurrentAvatarPreview = new AvatarPreview();
         private VRC.UI.PageAvatar pageAvatar;
         private UIExpansionKit.Components.EnableDisableListener pageAvatarListener;
 
@@ -67,6 +73,7 @@ namespace BetterAvatarPreview
             avatarMenu.AddSimpleButton("AvatarPreview+", OnPageAvatarOpen);
             avatarMenu.AddSimpleButton("BetterAvatarPreviewMenu", OpenMenu);
 
+            CurrentAvatarPreview = new AvatarPreview();
         }
 
         public override void VRChat_OnUiManagerInit()
@@ -88,6 +95,47 @@ namespace BetterAvatarPreview
             };
 
             initialized = true;
+        }
+
+        public override void OnUpdate()
+        {
+            if (!initialized || !avatarMenuOpen )
+            {
+                return;
+            }
+            if(pageAvatar == null)
+            {
+                MelonLogger.Error("pageAvatar null");
+                return;
+            }
+            var avPedestal = pageAvatar.field_Public_SimpleAvatarPedestal_0;
+            if(avPedestal == null)
+            {
+                MelonLogger.Warning("SimpleAvatarPedestal null");
+                return;
+            }
+            var apiAvatar = avPedestal.field_Internal_ApiAvatar_0;
+            if(apiAvatar == null)
+            {
+                MelonLogger.Warning("APIAvatar null");
+                return;
+            }
+            
+            // New avatar loaded
+            if(pageAvatar.field_Public_SimpleAvatarPedestal_0 != null && pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0 != null &&
+                !currentAvatarId.Equals(pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0.id))
+            {
+                // Remove this block 
+//                if(CURRENT_ITERATIONS >= MAX_ITERATIONS)
+//                {
+//                    MelonLogger.Warning("Returning prematurely, exceeded max iterations");
+//                    return;
+//                }
+                currentAvatarId = apiAvatar.id;
+//                MelonLogger.Msg("Loaded avatar: " + apiAvatar.name + " by " + apiAvatar.authorName); 
+                SetupCurrentAvatarPreview();
+//                CURRENT_ITERATIONS++;
+            }
         }
 
         private void AvatarMenuOpen(bool isOpen)
@@ -123,7 +171,18 @@ namespace BetterAvatarPreview
         private void SetupCurrentAvatarPreview()
         {
             var mainModel = GetMainModel();
+            var currentApiAvatar = pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0;
+            var avatarPrefab = pageAvatar.field_Private_GameObject_0;
+            var avatarName = currentApiAvatar.name;
+            var avatarId = currentApiAvatar.id;
+            var avatarVersion = CheckAvatarSDKVersion();
+            CurrentAvatarPreview.AvatarPrefab = avatarPrefab;
+            CurrentAvatarPreview.AvatarId = avatarId;
+            CurrentAvatarPreview.AvatarVersion = avatarVersion;
+            MelonLogger.Msg("Loaded new avatar: " + avatarName);
+            MelonLogger.Msg("Avatar version: " + ((avatarVersion == AvatarVersion.AV3) ? "AV3" : "AV2"));
         }
+
 
         public void OpenMenu()
         {
