@@ -27,6 +27,9 @@
         <Private>false</Private>
         <HintPath>$(MsBuildThisFileDirectory)\..\Libs\Assembly-CSharp.dll</HintPath>
       </Reference>
+      <Reference Include="Assembly-CSharp-firstpass">
+        <HintPath>..\VRCMods\Libs\Assembly-CSharp-firstpass.dll</HintPath>
+      </Reference>
       <Reference Include="Il2Cppmscorlib">
         <HintPath>..\VRCMods\Libs\Il2Cppmscorlib.dll</HintPath>
       </Reference>

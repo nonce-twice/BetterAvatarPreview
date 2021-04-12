@@ -15,13 +15,17 @@ using VRC.SDKInternal;
 
 namespace BetterAvatarPreview
 {
+
     public class BetterAvatarPreview : MelonMod
     {
         public const string Pref_CategoryName = "BetterAvatarPreview";
-        public bool Pref_DisableOutlines = false;
         public bool Pref_DebugOutput = false;
 
+        private bool initialized = false;
+        private bool avatarMenuOpen = false;
+
         private ICustomShowableLayoutedMenu customMenu;
+
 
         private VRCVrCameraSteam ourSteamCamera;
         private Transform ourCameraRig;
@@ -32,40 +36,67 @@ namespace BetterAvatarPreview
         private Transform userInterfaceTransform = null;
         private GameObject avatarMenuMainModel = null;
 
+        private AvatarPreview CurrentAvatarPreview;
+        private VRC.UI.PageAvatar pageAvatar;
+        private UIExpansionKit.Components.EnableDisableListener pageAvatarListener;
+
         private float PositionOffsetX = -1.0f;
         private float PositionOffsetY = -1.0f;
-        private Vector3 resetPosition;
         private Vector3 resetLocalPosition;
         private Quaternion resetLocalRotation;
-        private Vector3 resetScale;
 
-        enum AvatarVersion
-        {
-           AV2, AV3, None
-        }
 
         public override void OnApplicationStart()
         {
-            Harmony.Patch(AccessTools.Method(typeof(VRC.UI.PageAvatar), "OnEnable"), 
-                postfix: new HarmonyMethod(typeof(BetterAvatarPreview).GetMethod("OnPageAvatarOpen", BindingFlags.Static | BindingFlags.Public)));
+//            Harmony.Patch(AccessTools.Method(typeof(VRC.UI.PageAvatar), "OnEnable"), 
+//                postfix: new HarmonyMethod(typeof(BetterAvatarPreview).GetMethod("OnPageAvatarOpen", BindingFlags.Static | BindingFlags.Public)));
 
 
             MelonPreferences.CreateCategory(Pref_CategoryName);
-            MelonPreferences.CreateEntry(Pref_CategoryName, nameof(Pref_DisableOutlines),   false,  "Blug");
+            MelonPreferences.CreateEntry(Pref_CategoryName, nameof(Pref_DebugOutput),   false,  "Show Debug Output");
 
             customMenu = UIExpansionKit.API.ExpansionKitApi.CreateCustomFullMenuPopup(LayoutDescription.WideSlimList);
-            customMenu.AddSimpleButton("Do the thing", OnPageAvatarOpen);
+            customMenu.AddSimpleButton("Move model to floor", OnPageAvatarOpen);
             customMenu.AddSimpleButton("Move avatar further", MoveFurther);
             customMenu.AddSimpleButton("Move avatar closer", MoveCloser);
             customMenu.AddSimpleButton("Toggle Rotation", ToggleAvatarRotation);
+            customMenu.AddSimpleButton("DebugAvatarInfo", ShowDebugAvatarInfo);
             customMenu.AddSimpleButton("Close", CloseMenu);
 
             var avatarMenu = UIExpansionKit.API.ExpansionKitApi.GetExpandedMenu(ExpandedMenu.AvatarMenu);
-            avatarMenu.AddSimpleButton("BetterAvatarPreview", OpenMenu);
-            avatarMenu.AddSimpleButton("DebugAvatarInfo", DebugAvatarInfo);
+            avatarMenu.AddSimpleButton("AvatarPreview+", OnPageAvatarOpen);
+            avatarMenu.AddSimpleButton("BetterAvatarPreviewMenu", OpenMenu);
+
         }
 
-        public void DebugAvatarInfo()
+        public override void VRChat_OnUiManagerInit()
+        {
+            // Taken from UIExpansionKit by Knah
+            pageAvatar = GameObject.Find("UserInterface/MenuContent/Screens/Avatar").GetComponent<VRC.UI.PageAvatar>();
+            pageAvatarListener = pageAvatar.gameObject.GetComponent<UIExpansionKit.Components.EnableDisableListener>();
+            if(pageAvatarListener == null)
+            {
+                pageAvatarListener = pageAvatar.gameObject.AddComponent<UIExpansionKit.Components.EnableDisableListener>();
+            }
+            pageAvatarListener.OnEnabled += () =>
+            {
+                AvatarMenuOpen(true);
+            };
+            pageAvatarListener.OnDisabled += () =>
+            {
+                AvatarMenuOpen(false);
+            };
+
+            initialized = true;
+        }
+
+        private void AvatarMenuOpen(bool isOpen)
+        {
+            MelonLogger.Msg(isOpen ? "Avatar menu opened." : "Avatar menu closed.");
+            avatarMenuOpen = isOpen;
+        }
+
+        public void ShowDebugAvatarInfo()
         {
             if(avatarMenuMainModel == null)
             {
@@ -73,7 +104,6 @@ namespace BetterAvatarPreview
                 return;
             }
             AvatarVersion avatarSDKVersion = CheckAvatarSDKVersion();
-
             bool isSDK3 = (avatarSDKVersion == AvatarVersion.AV3);
             MelonLogger.Msg("Avatar Version: " + (isSDK3 ? "SDK3" : "SDK2"));
         }
@@ -88,19 +118,11 @@ namespace BetterAvatarPreview
             }
             rotator.enabled = !rotator.isActiveAndEnabled;
         }
-        public override void VRChat_OnUiManagerInit()
+
+        //TODO
+        private void SetupCurrentAvatarPreview()
         {
-//            // Taken directly from Knah's ViewpointTweaker Mod
-//            foreach (var vrcTracking in VRCTrackingManager.field_Private_Static_VRCTrackingManager_0.field_Private_List_1_VRCTracking_0)
-//            {
-//                var trackingSteam = vrcTracking.TryCast<VRCTrackingSteam>();
-//                if (trackingSteam == null) continue;
-//
-//                ourSteamCamera = trackingSteam.GetComponentInChildren<VRCVrCameraSteam>();
-//                ourCameraRig = trackingSteam.transform.Find("SteamCamera/[CameraRig]");
-//                ourCameraTransform = trackingSteam.transform.Find("SteamCamera/[CameraRig]/Neck/Camera (head)/Camera (eye)");
-//            }
-//
+            var mainModel = GetMainModel();
         }
 
         public void OpenMenu()
@@ -171,32 +193,41 @@ namespace BetterAvatarPreview
         {
             if(avatarMenuMainModel == null)
             {
-                MelonLogger.Warning("MainModel was not found");
                 avatarMenuMainModel = GameObject.Find(avatarMenuMainModelPath);
+                if(avatarMenuMainModel == null)
+                {
+                    MelonLogger.Error("MainModel not found! BetterAvatarPreview won't work...");
+                }
             }
             return avatarMenuMainModel;
         }
+
+        private bool MainModelActive()
+        {
+            var mainModel = GetMainModel();
+            if (mainModel != null)
+            {
+                return mainModel.activeInHierarchy;
+            }
+            return false;
+        }
+
         private void MoveModel(Vector3 offset)
         {
-            if (avatarMenuMainModel == null)
-            {
-                return;
-            }
             GetMainModel().transform.localPosition += offset;
+        }
+        private void MoveModelToFloor(Vector3 scaleOffset, Vector3 playerPosition, Vector3 mainModelPosition)
+
+        {
         }
 
         public void OnPageAvatarOpen()
         {
             Transform playerTransform = VRCPlayer.field_Internal_Static_VRCPlayer_0.transform;
-            avatarMenuMainModel = GameObject.Find(avatarMenuMainModelPath);
-            if(avatarMenuMainModel == null)
-            {
-                MelonLogger.Warning("MainModel was not found");
-                return;
-            }
-            MelonLogger.Msg("MainModel and Transform found!");
 
-            if(betterAvatarPreviewOn) // reset position and scales
+            var mainModel = GetMainModel();
+
+            if (betterAvatarPreviewOn) // reset position and scales
             {
                 MelonLogger.Msg("Resetting...");
                 ResetBetterAvatarPreview();
@@ -204,69 +235,57 @@ namespace BetterAvatarPreview
             }
 
             // Store old local position
-            resetLocalPosition = avatarMenuMainModel.transform.localPosition;
-            resetLocalRotation = avatarMenuMainModel.transform.localRotation;
+            resetLocalPosition = mainModel.transform.localPosition;
+            resetLocalRotation = mainModel.transform.localRotation;
 
             // Scale to 1:1, within reason...
-            var ls = avatarMenuMainModel.transform.lossyScale;
-            Vector3 newLocalScale = new Vector3(1.0f / ls.x,  1.0f / ls.y,  1.0f / ls.z);
-            avatarMenuMainModel.transform.localScale = newLocalScale;
-            avatarMenuMainModel.transform.rotation = Quaternion.identity;
+            Vector3 newLocalScale = GetScaleOffset(mainModel);
+            mainModel.transform.localScale = newLocalScale;
+            mainModel.transform.rotation = Quaternion.identity;
 
             // must be multiplied by local scale offset to match floor
-            float floorOffset = newLocalScale.y * (avatarMenuMainModel.transform.position.y - playerTransform.position.y); // should be positive 
-            avatarMenuMainModel.transform.localPosition = new Vector3(0.0f, -floorOffset , 0.0f);
+            float floorOffset = newLocalScale.y * (mainModel.transform.position.y - playerTransform.position.y); // should be positive 
+            mainModel.transform.localPosition = new Vector3(0.0f, -floorOffset, 0.0f);
 
             // Move model a bit further out
             Vector3 playerRight = playerTransform.right;
             float xOffset = newLocalScale.x * PositionOffsetX;
             MoveModel(new Vector3(xOffset, 0.0f, 0.0f));
 
-
-
             // Mark dirty
             betterAvatarPreviewOn = true;
             MelonLogger.Msg("BetterAvatarPreview on!");
         }
 
+        // Returns 1 / lossyScale which is the amt. to scale to get real size
+        private Vector3 GetScaleOffset(GameObject mainModel)
+        {
+            var ls = GetMainModel().transform.lossyScale;
+            return new Vector3(1.0f/ls.x, 1.0f/ls.y, 1.0f/ls.z);
+        }
+
         private void UpdatePreferences()
         {
-            Pref_DisableOutlines   = MelonPreferences.GetEntryValue<bool>(Pref_CategoryName, nameof(Pref_DisableOutlines));
             Pref_DebugOutput = MelonPreferences.GetEntryValue<bool>(Pref_CategoryName, nameof(Pref_DebugOutput));
+        }
+
+        private void OnAvatarUpdate()
+        {
+
         }
 
         private AvatarVersion CheckAvatarSDKVersion()
         {
-            if(avatarMenuMainModel != null)
-            {
-                Component[] sdk2 = avatarMenuMainModel.GetComponentsInChildren<VRCSDK2.VRC_AvatarDescriptor>();
-                if (sdk2.Length > 0) 
-                    return AvatarVersion.AV2;
-
-                // Redundant but implemented for testing
-                Component[] sdk3 = avatarMenuMainModel.GetComponentsInChildren<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
-                if(sdk3.Length > 0)
-                    return AvatarVersion.AV3; 
-                
-            }
+            // Move logic to avatar preview class
+            Component[] sdk2 = GetMainModel().GetComponentsInChildren<VRCSDK2.VRC_AvatarDescriptor>();
+            if (sdk2.Length > 0) 
+                return AvatarVersion.AV2;
+            // SDK3 check redundant (CURRENTLY) but implemented for testing
+            Component[] sdk3 = GetMainModel().GetComponentsInChildren<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
+            if(sdk3.Length > 0)
+                return AvatarVersion.AV3; 
             return AvatarVersion.None;
         }
-        private void SetTetherReferences()
-        {
-//            try 
-//            {
-//                VRCPlayer player = VRCPlayer.field_Internal_Static_VRCPlayer_0; // is not null
-//                leftHandTether  = GameObject.Find(player.gameObject.name + "/AnimationController/HeadAndHandIK/LeftEffector/PickupTether(Clone)/Tether/Quad").gameObject;
-//            }
-//            catch(Exception e)
-//            {
-//                MelonLogger.Error(e.ToString());
-//            }
-//            finally
-//            {
-//            }
-        }
-
 
         private void LogDebugMsg(string msg)
         {
