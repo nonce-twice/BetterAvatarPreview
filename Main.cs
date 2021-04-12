@@ -28,6 +28,7 @@ namespace BetterAvatarPreview
 
         private bool initialized = false;
         private bool avatarMenuOpen = false;
+        private bool desktopZoomOut = false;
 
         private ICustomShowableLayoutedMenu customMenu;
         private string currentAvatarId = "";
@@ -50,6 +51,7 @@ namespace BetterAvatarPreview
         private float PositionOffsetY = -1.0f;
         private Vector3 resetLocalPosition;
         private Quaternion resetLocalRotation;
+        private Vector3 resetDesktopCameraPosition = new Vector3();
 
 
         public override void OnApplicationStart()
@@ -63,6 +65,7 @@ namespace BetterAvatarPreview
 
             customMenu = UIExpansionKit.API.ExpansionKitApi.CreateCustomFullMenuPopup(LayoutDescription.WideSlimList);
             customMenu.AddSimpleButton("Move model to floor", OnPageAvatarOpen);
+            customMenu.AddSimpleButton("Reset", ResetBetterAvatarPreview);
             customMenu.AddSimpleButton("Move avatar further", MoveFurther);
             customMenu.AddSimpleButton("Move avatar closer", MoveCloser);
             customMenu.AddSimpleButton("Toggle Rotation", ToggleAvatarRotation);
@@ -97,44 +100,32 @@ namespace BetterAvatarPreview
             initialized = true;
         }
 
+        // TODO
+        private void DesktopZoomOut(bool reset)
+        {
+
+        }
+
         public override void OnUpdate()
         {
             if (!initialized || !avatarMenuOpen )
             {
                 return;
             }
-            if(pageAvatar == null)
-            {
-                MelonLogger.Error("pageAvatar null");
-                return;
-            }
-            var avPedestal = pageAvatar.field_Public_SimpleAvatarPedestal_0;
-            if(avPedestal == null)
-            {
-                MelonLogger.Warning("SimpleAvatarPedestal null");
-                return;
-            }
-            var apiAvatar = avPedestal.field_Internal_ApiAvatar_0;
-            if(apiAvatar == null)
-            {
-                MelonLogger.Warning("APIAvatar null");
-                return;
-            }
             
+            // Adapted from FavCat by Knah
             // New avatar loaded
             if(pageAvatar.field_Public_SimpleAvatarPedestal_0 != null && pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0 != null &&
                 !currentAvatarId.Equals(pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0.id))
             {
-                // Remove this block 
-//                if(CURRENT_ITERATIONS >= MAX_ITERATIONS)
-//                {
-//                    MelonLogger.Warning("Returning prematurely, exceeded max iterations");
-//                    return;
-//                }
-                currentAvatarId = apiAvatar.id;
-//                MelonLogger.Msg("Loaded avatar: " + apiAvatar.name + " by " + apiAvatar.authorName); 
+                currentAvatarId = pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0.id;
+               // MelonLogger.Msg("Loaded avatar: " + apiAvatar.name + " by " + apiAvatar.authorName); 
                 SetupCurrentAvatarPreview();
-//                CURRENT_ITERATIONS++;
+                if(betterAvatarPreviewOn)
+                {
+                    ResetBetterAvatarPreview();
+                    OnPageAvatarOpen();
+                }
             }
         }
 
@@ -146,25 +137,18 @@ namespace BetterAvatarPreview
 
         public void ShowDebugAvatarInfo()
         {
-            if(avatarMenuMainModel == null)
-            {
-                MelonLogger.Warning("Main Model is null, returning.");
-                return;
-            }
-            AvatarVersion avatarSDKVersion = CheckAvatarSDKVersion();
-            bool isSDK3 = (avatarSDKVersion == AvatarVersion.AV3);
-            MelonLogger.Msg("Avatar Version: " + (isSDK3 ? "SDK3" : "SDK2"));
+//            if(avatarMenuMainModel == null)
+//            {
+//                MelonLogger.Warning("Main Model is null, returning.");
+//                return;
+//            }
+//            AvatarVersion avatarSDKVersion = CheckAvatarSDKVersion();
+//            bool isSDK3 = (avatarSDKVersion == AvatarVersion.AV3);
+//            MelonLogger.Msg("Avatar Version: " + (isSDK3 ? "SDK3" : "SDK2"));
         }
-
-        public void ToggleAvatarRotation()
+        private void LookAtModel(bool reset)
         {
-            var rotator = GetMainModel().GetComponent<UnityStandardAssets.Utility.AutoMoveAndRotate>();
-            if(rotator == null)
-            {
-                MelonLogger.Warning("Could not get AutoMoveAndRotate component, not toggling rotation.");
-                return;
-            }
-            rotator.enabled = !rotator.isActiveAndEnabled;
+
         }
 
         //TODO
@@ -173,16 +157,13 @@ namespace BetterAvatarPreview
             var mainModel = GetMainModel();
             var currentApiAvatar = pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0;
             var avatarPrefab = pageAvatar.field_Private_GameObject_0;
-            var avatarName = currentApiAvatar.name;
-            var avatarId = currentApiAvatar.id;
-            var avatarVersion = CheckAvatarSDKVersion();
-            CurrentAvatarPreview.AvatarPrefab = avatarPrefab;
-            CurrentAvatarPreview.AvatarId = avatarId;
-            CurrentAvatarPreview.AvatarVersion = avatarVersion;
-            MelonLogger.Msg("Loaded new avatar: " + avatarName);
-            MelonLogger.Msg("Avatar version: " + ((avatarVersion == AvatarVersion.AV3) ? "AV3" : "AV2"));
+            CurrentAvatarPreview.AvatarPrefab = pageAvatar.field_Private_GameObject_0;
+            CurrentAvatarPreview.AvatarName = currentApiAvatar.name;
+            CurrentAvatarPreview.AuthorName = currentApiAvatar.authorName;
+            CurrentAvatarPreview.AvatarId = currentApiAvatar.id;
+            CurrentAvatarPreview.AvatarVersion = CheckAvatarSDKVersion(avatarPrefab);
+            MelonLogger.Msg("Loaded new avatar!\n " + CurrentAvatarPreview.ToString());
         }
-
 
         public void OpenMenu()
         {
@@ -191,6 +172,16 @@ namespace BetterAvatarPreview
         public void CloseMenu()
         {
             customMenu.Hide();
+        }
+
+        // Move these to a Utilities class
+        private void MoveModel(Vector3 offset)
+        {
+            GetMainModel().transform.localPosition += offset;
+        }
+        private void MoveModelToFloor(Vector3 scaleOffset, Vector3 playerPosition, Vector3 mainModelPosition)
+
+        {
         }
 
         public void MoveFurther()
@@ -203,6 +194,16 @@ namespace BetterAvatarPreview
         {
             if (!betterAvatarPreviewOn) return;
             MoveModel(new Vector3(0.25f, 0.0f, 0.0f));
+        }
+        public void ToggleAvatarRotation()
+        {
+            var rotator = GetMainModel().GetComponent<UnityStandardAssets.Utility.AutoMoveAndRotate>();
+            if(rotator == null)
+            {
+                MelonLogger.Warning("Could not get AutoMoveAndRotate component, not toggling rotation.");
+                return;
+            }
+            rotator.enabled = !rotator.isActiveAndEnabled;
         }
 
         // Skip over initial loading of (buildIndex, sceneName): [(0, "app"), (1, "ui")]
@@ -271,27 +272,20 @@ namespace BetterAvatarPreview
             return false;
         }
 
-        private void MoveModel(Vector3 offset)
-        {
-            GetMainModel().transform.localPosition += offset;
-        }
-        private void MoveModelToFloor(Vector3 scaleOffset, Vector3 playerPosition, Vector3 mainModelPosition)
 
-        {
-        }
-
+        // Toggles the thing
         public void OnPageAvatarOpen()
         {
             Transform playerTransform = VRCPlayer.field_Internal_Static_VRCPlayer_0.transform;
 
             var mainModel = GetMainModel();
 
-            if (betterAvatarPreviewOn) // reset position and scales
-            {
-                MelonLogger.Msg("Resetting...");
-                ResetBetterAvatarPreview();
-                return;
-            }
+//            if (betterAvatarPreviewOn) // reset position and scales
+//            {
+//                MelonLogger.Msg("Resetting...");
+//                ResetBetterAvatarPreview();
+//                return;
+//            }
 
             // Store old local position
             resetLocalPosition = mainModel.transform.localPosition;
@@ -333,14 +327,18 @@ namespace BetterAvatarPreview
 
         }
 
-        private AvatarVersion CheckAvatarSDKVersion()
+        private AvatarVersion CheckAvatarSDKVersion(GameObject avatarPrefab)
         {
+            if(avatarPrefab == null)
+            {
+                return AvatarVersion.None;
+            }
             // Move logic to avatar preview class
-            Component[] sdk2 = GetMainModel().GetComponentsInChildren<VRCSDK2.VRC_AvatarDescriptor>();
+            Component[] sdk2 = avatarPrefab.GetComponentsInChildren<VRCSDK2.VRC_AvatarDescriptor>();
             if (sdk2.Length > 0) 
                 return AvatarVersion.AV2;
             // SDK3 check redundant (CURRENTLY) but implemented for testing
-            Component[] sdk3 = GetMainModel().GetComponentsInChildren<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
+            Component[] sdk3 = avatarPrefab.GetComponentsInChildren<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
             if(sdk3.Length > 0)
                 return AvatarVersion.AV3; 
             return AvatarVersion.None;
