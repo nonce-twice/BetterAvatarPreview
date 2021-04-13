@@ -119,11 +119,14 @@ namespace BetterAvatarPreview
                 !currentAvatarId.Equals(pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0.id))
             {
                 currentAvatarId = pageAvatar.field_Public_SimpleAvatarPedestal_0.field_Internal_ApiAvatar_0.id;
-               // MelonLogger.Msg("Loaded avatar: " + apiAvatar.name + " by " + apiAvatar.authorName); 
+                // MelonLogger.Msg("Loaded avatar: " + apiAvatar.name + " by " + apiAvatar.authorName); 
+                if (betterAvatarPreviewOn)
+                {
+                    ResetBetterAvatarPreview();
+                }
                 SetupCurrentAvatarPreview();
                 if(betterAvatarPreviewOn)
                 {
-                    ResetBetterAvatarPreview();
                     OnPageAvatarOpen();
                 }
             }
@@ -162,6 +165,11 @@ namespace BetterAvatarPreview
             CurrentAvatarPreview.AuthorName = currentApiAvatar.authorName;
             CurrentAvatarPreview.AvatarId = currentApiAvatar.id;
             CurrentAvatarPreview.AvatarVersion = CheckAvatarSDKVersion(avatarPrefab);
+            CurrentAvatarPreview.ResetPosition = GetMainModel().transform.localPosition;
+            CurrentAvatarPreview.ResetScale = GetMainModel().transform.localScale;
+//            CurrentAvatarPreview.LossyScale = GetMainModel().transform.lossyScale;
+            CurrentAvatarPreview.LossyScale = GetMainModel().transform.lossyScale;
+            CurrentAvatarPreview.Valid = true;
             MelonLogger.Msg("Loaded new avatar!\n " + CurrentAvatarPreview.ToString());
         }
 
@@ -239,12 +247,22 @@ namespace BetterAvatarPreview
                 MelonLogger.Warning("betterAvatarPRevionOn was false! returning...");
                 return;
             }
+            if(!CurrentAvatarPreview.Valid)
+            {
+                MelonLogger.Warning("No avatar loaded yet, not resetting...");
+                return;
+            }
             if(avatarMenuMainModel != null)
             {
                 MelonLogger.Warning("mainModel not null, reset positions");
-                avatarMenuMainModel.transform.localPosition = resetLocalPosition;
-                avatarMenuMainModel.transform.localRotation = resetLocalRotation;
-                avatarMenuMainModel.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
+                //                avatarMenuMainModel.transform.localPosition = resetLocalPosition;
+                //                avatarMenuMainModel.transform.localRotation = resetLocalRotation;
+                //                avatarMenuMainModel.transform.localPosition = new Vector3(0.0f,0.0f,0.0f);
+                //                avatarMenuMainModel.transform.localRotation = Quaternion.identity;
+                //                avatarMenuMainModel.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
+                avatarMenuMainModel.transform.localPosition = CurrentAvatarPreview.ResetPosition;
+                avatarMenuMainModel.transform.localRotation = Quaternion.identity;
+                avatarMenuMainModel.transform.localScale = CurrentAvatarPreview.ResetScale;
             }
             betterAvatarPreviewOn = false;
         }
@@ -280,19 +298,20 @@ namespace BetterAvatarPreview
 
             var mainModel = GetMainModel();
 
-//            if (betterAvatarPreviewOn) // reset position and scales
-//            {
-//                MelonLogger.Msg("Resetting...");
-//                ResetBetterAvatarPreview();
-//                return;
-//            }
+            //            if (betterAvatarPreviewOn) // reset position and scales
+            //            {
+            //                MelonLogger.Msg("Resetting...");
+            //                ResetBetterAvatarPreview();
+            //                return;
+            //            }
 
-            // Store old local position
-            resetLocalPosition = mainModel.transform.localPosition;
-            resetLocalRotation = mainModel.transform.localRotation;
+            //            // Store old local position
+            //            resetLocalPosition = mainModel.transform.localPosition;
+            //            resetLocalRotation = mainModel.transform.localRotation;
 
             // Scale to 1:1, within reason...
-            Vector3 newLocalScale = GetScaleOffset(mainModel);
+//            Vector3 newLocalScale = GetScaleOffset(CurrentAvatarPreview.LossyScale);
+            Vector3 newLocalScale = GetScaleOffset(mainModel.transform.lossyScale);
             mainModel.transform.localScale = newLocalScale;
             mainModel.transform.rotation = Quaternion.identity;
 
@@ -311,9 +330,11 @@ namespace BetterAvatarPreview
         }
 
         // Returns 1 / lossyScale which is the amt. to scale to get real size
-        private Vector3 GetScaleOffset(GameObject mainModel)
+        private Vector3 GetScaleOffset(Vector3 lossyScale)
+//        private Vector3 GetScaleOffset(GameObject mainModel)
         {
-            var ls = GetMainModel().transform.lossyScale;
+            var ls = lossyScale;
+//            var ls = GetMainModel().transform.lossyScale;
             return new Vector3(1.0f/ls.x, 1.0f/ls.y, 1.0f/ls.z);
         }
 
@@ -334,11 +355,11 @@ namespace BetterAvatarPreview
                 return AvatarVersion.None;
             }
             // Move logic to avatar preview class
-            Component[] sdk2 = avatarPrefab.GetComponentsInChildren<VRCSDK2.VRC_AvatarDescriptor>();
+            Component[] sdk2 = avatarPrefab.GetComponents<VRCSDK2.VRC_AvatarDescriptor>();
             if (sdk2.Length > 0) 
                 return AvatarVersion.AV2;
             // SDK3 check redundant (CURRENTLY) but implemented for testing
-            Component[] sdk3 = avatarPrefab.GetComponentsInChildren<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
+            Component[] sdk3 = avatarPrefab.GetComponents<VRC.SDK3.Avatars.Components.VRCAvatarDescriptor>();
             if(sdk3.Length > 0)
                 return AvatarVersion.AV3; 
             return AvatarVersion.None;

@@ -24,6 +24,10 @@ namespace BetterAvatarPreview
         private string authorName = "";
         private string avatarId = "";
         private AvatarVersion avatarVersion = AvatarVersion.None;
+        private Vector3 resetPosition;
+        private Vector3 resetScale;
+        private Vector3 lossyScale;
+        private bool valid;
 
         public GameObject AvatarPrefab
         { get; set; }
@@ -53,7 +57,27 @@ namespace BetterAvatarPreview
             get { return avatarVersion; }
             set { avatarVersion = value; }
         }
+        public Vector3 ResetPosition 
+        {
+            get { return resetPosition; }
+            set { resetPosition = value; }
+        }
 
+        public Vector3 ResetScale 
+        {
+            get { return resetScale; }
+            set { resetScale = value; }
+        }
+        public Vector3 LossyScale 
+        {
+            get { return lossyScale; }
+            set { lossyScale = value; }
+        }
+        public bool Valid 
+        {
+            get { return valid; }
+            set { valid = value; }
+        }
         public override string ToString()
         {
             return "Name: " + AvatarName + "\n"
