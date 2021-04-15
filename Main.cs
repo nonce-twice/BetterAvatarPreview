@@ -241,6 +241,7 @@ namespace BetterAvatarPreview
 
         public void ResetBetterAvatarPreview()
         {
+            // Add check for Fallback avatar shown
             MelonLogger.Msg("Resetting avatar preview");
             if(!betterAvatarPreviewOn)
             {
